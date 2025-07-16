@@ -56,6 +56,13 @@ impl Tree {
             i.show(-1);
         }
     }
+
+    pub fn update(&mut self, key: isize, new_value: isize) -> Option<isize> {
+        if let Some(i) = self.root.as_mut() {
+            return i.update_value(key, new_value);
+        }
+        None
+    }
 }
 
 enum Rotation {
@@ -249,6 +256,31 @@ impl TreeNode {
         right_node.left = Some(base_node);
         right_node.fix_height();
         return right_node;
+    }
+
+    fn update_value(&mut self, key: isize, new_value: isize) -> Option<isize> {
+        if self.key == key {
+            let old_value = self.value;
+            self.value = new_value;
+            return Some(old_value);
+        }
+
+        if self.key > key {
+            if let Some(i) = self.left.as_mut() {
+                return i.update_value(key, new_value);
+            } else {
+                return None;
+            }
+        }
+
+        if self.key > key {
+            if let Some(i) = self.right.as_mut() {
+                return i.update_value(key, new_value);
+            } else {
+                return None;
+            }
+        }
+        None
     }
 }
 
