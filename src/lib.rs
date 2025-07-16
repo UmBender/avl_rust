@@ -1,8 +1,10 @@
+#[derive(Default)]
 pub struct Tree {
     root: Option<Box<TreeNode>>,
-    size: usize,
+    pub size: usize,
 }
 
+#[derive(Default)]
 struct TreeNode {
     key: isize,
     value: isize,
@@ -13,10 +15,10 @@ struct TreeNode {
 
 impl Tree {
     pub fn new() -> Self {
-        return Self {
+        Self {
             root: None,
             size: 0,
-        };
+        }
     }
 
     pub fn insert(&mut self, key: isize, value: isize) -> Option<()> {
@@ -35,6 +37,7 @@ impl Tree {
             }
             None => {
                 self.root = Some(Box::new(TreeNode::new(key, value)));
+                self.size += 1;
                 return Some(());
             }
         }
@@ -62,6 +65,21 @@ impl Tree {
             return i.update_value(key, new_value);
         }
         None
+    }
+
+    pub fn delete(&mut self, key: isize) -> Option<isize> {
+        if let Some(i) = self.root.take() {
+            let (new_root, value) = TreeNode::delete(i, key);
+            self.root = new_root;
+            match value {
+                Some(node) => {
+                    self.size -= 1;
+                    return Some(node.value);
+                }
+                None => return None,
+            }
+        }
+        return None;
     }
 }
 
@@ -104,6 +122,7 @@ impl Rotation {
 impl TreeNode {
     fn show(&self, parent: isize) {
         if let Some(i) = self.left.as_ref() {
+            println!("Left");
             i.show(self.key);
         }
         println!(
@@ -116,6 +135,7 @@ impl TreeNode {
         );
         if let Some(i) = self.right.as_ref() {
             i.show(self.key);
+            println!("Right");
         }
     }
     fn new(key: isize, value: isize) -> TreeNode {
@@ -281,6 +301,106 @@ impl TreeNode {
             }
         }
         None
+    }
+
+    fn delete(
+        mut actual_node: Box<TreeNode>,
+        key: isize,
+    ) -> (Option<Box<TreeNode>>, Option<Box<TreeNode>>) {
+        if actual_node.key == key {
+            let (replace, deleted_node) = Self::delete_node(actual_node);
+
+            return (replace, Some(deleted_node));
+        }
+
+        if actual_node.key > key {
+            if let Some(i) = actual_node.left.take() {
+                let (replace, deleted_node) = Self::delete(i, key);
+                actual_node.left = replace;
+                actual_node.fix_height();
+                return (Some(Self::fix_balance(actual_node)), deleted_node);
+            } else {
+                return (Some(actual_node), None);
+            }
+        } else if let Some(i) = actual_node.right.take() {
+            let (replace, deleted_node) = Self::delete(i, key);
+            actual_node.right = replace;
+            actual_node.fix_height();
+            return (Some(Self::fix_balance(actual_node)), deleted_node);
+        } else {
+            return (Some(actual_node), None);
+        }
+    }
+
+    fn delete_node(actual_node: Box<TreeNode>) -> (Option<Box<TreeNode>>, Box<TreeNode>) {
+        if actual_node.left.is_some() {
+            let (pred, new_actual) = Self::get_predecessor(actual_node);
+            let mut pred = pred.unwrap();
+            let mut new_actual = new_actual.unwrap();
+            pred.left = new_actual.left.take();
+            pred.right = new_actual.right.take();
+            pred.fix_height();
+            return (Some(Self::fix_balance(pred)), new_actual);
+        }
+
+        if actual_node.right.is_some() {
+            let (pred, new_actual) = Self::get_successor(actual_node);
+            let mut pred = pred.unwrap();
+            let mut new_actual = new_actual.unwrap();
+            pred.left = new_actual.left.take();
+            pred.right = new_actual.right.take();
+
+            pred.fix_height();
+            return (Some(Self::fix_balance(pred)), new_actual);
+        }
+
+        return (None, actual_node);
+    }
+
+    fn get_successor(
+        mut actual_node: Box<TreeNode>,
+    ) -> (Option<Box<TreeNode>>, Option<Box<TreeNode>>) {
+        if let Some(i) = actual_node.right.take() {
+            let (succ, new_right_node) = Self::get_lowest(i);
+            actual_node.right = new_right_node;
+            actual_node.fix_height();
+            return (Some(succ), Some(Self::fix_balance(actual_node)));
+        }
+        (None, None)
+    }
+
+    fn get_predecessor(
+        mut actual_node: Box<TreeNode>,
+    ) -> (Option<Box<TreeNode>>, Option<Box<TreeNode>>) {
+        if let Some(i) = actual_node.left.take() {
+            let (pred, new_left_node) = Self::get_greatest(i);
+            actual_node.left = new_left_node;
+            actual_node.fix_height();
+            return (Some(pred), Some(Self::fix_balance(actual_node)));
+        }
+        (None, None)
+    }
+
+    fn get_lowest(mut actual_node: Box<TreeNode>) -> (Box<TreeNode>, Option<Box<TreeNode>>) {
+        if let Some(i) = actual_node.left.take() {
+            let (lowest, fixed_node) = Self::get_lowest(i);
+            actual_node.left = fixed_node;
+            actual_node.fix_height();
+            return (lowest, Some(Self::fix_balance(actual_node)));
+        }
+        let right_node = actual_node.right.take();
+        return (actual_node, right_node);
+    }
+
+    fn get_greatest(mut actual_node: Box<TreeNode>) -> (Box<TreeNode>, Option<Box<TreeNode>>) {
+        if let Some(i) = actual_node.right.take() {
+            let (greatest, fixed_node) = Self::get_greatest(i);
+            actual_node.right = fixed_node;
+            actual_node.fix_height();
+            return (greatest, Some(Self::fix_balance(actual_node)));
+        }
+        let left_node = actual_node.left.take();
+        return (actual_node, left_node);
     }
 }
 
