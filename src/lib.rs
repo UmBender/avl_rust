@@ -1,4 +1,5 @@
 use std::clone::Clone;
+use std::cmp::Ordering;
 use std::cmp::PartialEq;
 use std::cmp::PartialOrd;
 use std::fmt::Display;
@@ -31,6 +32,14 @@ struct TreeNode<
 }
 
 impl<K: Clone + Display + PartialEq + PartialOrd, V: Clone + Display + PartialEq + PartialOrd>
+    Default for Tree<K, V>
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<K: Clone + Display + PartialEq + PartialOrd, V: Clone + Display + PartialEq + PartialOrd>
     Tree<K, V>
 {
     pub fn new() -> Self {
@@ -52,24 +61,20 @@ impl<K: Clone + Display + PartialEq + PartialOrd, V: Clone + Display + PartialEq
                     self.root = Some(TreeNode::fix_balance(i));
                 }
 
-                return result;
+                result
             }
             None => {
                 self.root = Some(Box::new(TreeNode::new(key, value)));
                 self.size += 1;
-                return Some(());
+                Some(())
             }
         }
     }
 
     pub fn get(&self, key: K) -> Option<V> {
         match self.root.as_ref() {
-            Some(i) => {
-                return i.get(key);
-            }
-            None => {
-                return None;
-            }
+            Some(i) => i.get(key),
+            None => None,
         }
     }
 
@@ -90,17 +95,21 @@ impl<K: Clone + Display + PartialEq + PartialOrd, V: Clone + Display + PartialEq
         if let Some(i) = self.root.take() {
             let (new_root, value) = TreeNode::delete(i, key);
             self.root = new_root;
-            match value {
+            return match value {
                 Some(node) => {
                     self.size -= 1;
-                    return Some(node.value);
+                    Some(node.value)
                 }
-                None => return None,
-            }
+                None => None,
+            };
         }
-        return None;
+        None
     }
 }
+
+type OptionReplaceRest<K, V> = (Option<Box<TreeNode<K, V>>>, Option<Box<TreeNode<K, V>>>);
+type ReplaceResult<K, V> = (Option<Box<TreeNode<K, V>>>, Box<TreeNode<K, V>>);
+type ReplaceNext<K, V> = (Box<TreeNode<K, V>>, Option<Box<TreeNode<K, V>>>);
 
 impl<K: Clone + PartialEq + Display + PartialOrd, V: Clone + Display + PartialEq + PartialOrd>
     TreeNode<K, V>
@@ -174,31 +183,25 @@ impl<K: Clone + PartialEq + Display + PartialOrd, V: Clone + Display + PartialEq
             self.left = Some(actual);
         }
         self.fix_height();
-        return result;
+        result
     }
 
     fn fix_balance(mut node: Box<TreeNode<K, V>>) -> Box<TreeNode<K, V>> {
         let rotation = Self::new_rotation(&node);
         match rotation {
-            Rotation::LeftLeft => {
-                return Self::right_rotation(node);
-            }
+            Rotation::LeftLeft => Self::right_rotation(node),
             Rotation::LeftRight => {
                 let holder = Self::left_rotation(node.left.take().unwrap());
                 node.left = Some(holder);
-                return Self::right_rotation(node);
+                Self::right_rotation(node)
             }
             Rotation::RightLeft => {
                 let holder = Self::right_rotation(node.right.take().unwrap());
                 node.right = Some(holder);
-                return Self::left_rotation(node);
+                Self::left_rotation(node)
             }
-            Rotation::RightRight => {
-                return Self::left_rotation(node);
-            }
-            Rotation::NoRotaion => {
-                return node;
-            }
+            Rotation::RightRight => Self::left_rotation(node),
+            Rotation::NoRotaion => node,
         }
     }
 
@@ -230,12 +233,12 @@ impl<K: Clone + PartialEq + Display + PartialOrd, V: Clone + Display + PartialEq
             None => 0,
             Some(i) => i.height + 1,
         };
-        return (left, right);
+        (left, right)
     }
 
     fn get_factor(&self) -> isize {
         let (left, right) = self.get_heights();
-        return (right as isize) - (left as isize);
+        (right as isize) - (left as isize)
     }
 
     fn fix_height(&mut self) {
@@ -250,7 +253,7 @@ impl<K: Clone + PartialEq + Display + PartialOrd, V: Clone + Display + PartialEq
         base_node.fix_height();
         left_node.right = Some(base_node);
         left_node.fix_height();
-        return left_node;
+        left_node
     }
 
     fn left_rotation(mut base_node: Box<TreeNode<K, V>>) -> Box<TreeNode<K, V>> {
@@ -260,117 +263,110 @@ impl<K: Clone + PartialEq + Display + PartialOrd, V: Clone + Display + PartialEq
         base_node.fix_height();
         right_node.left = Some(base_node);
         right_node.fix_height();
-        return right_node;
+        right_node
     }
 
     fn update_value(&mut self, key: K, new_value: V) -> Option<V> {
-        if self.key == key {
-            let old_value = self.value.clone();
-            self.value = new_value;
-            return Some(old_value);
-        }
-
-        if self.key > key {
-            if let Some(i) = self.left.as_mut() {
-                return i.update_value(key, new_value);
-            } else {
-                return None;
+        match self.key.partial_cmp(&key) {
+            None => None,
+            Some(Ordering::Less) => {
+                if let Some(i) = self.right.as_mut() {
+                    return i.update_value(key, new_value);
+                }
+                None
             }
-        }
 
-        if self.key > key {
-            if let Some(i) = self.right.as_mut() {
-                return i.update_value(key, new_value);
-            } else {
-                return None;
+            Some(Ordering::Equal) => {
+                let old_value = self.value.clone();
+                self.value = new_value;
+                Some(old_value)
             }
-        }
-        None
-    }
 
-    fn delete(
-        mut actual_node: Box<TreeNode<K, V>>,
-        key: K,
-    ) -> (Option<Box<TreeNode<K, V>>>, Option<Box<TreeNode<K, V>>>) {
-        if actual_node.key == key {
-            let (replace, deleted_node) = Self::delete_node(actual_node);
-
-            return (replace, Some(deleted_node));
-        }
-
-        if actual_node.key > key {
-            if let Some(i) = actual_node.left.take() {
-                let (replace, deleted_node) = Self::delete(i, key);
-                actual_node.left = replace;
-                actual_node.fix_height();
-                return (Some(Self::fix_balance(actual_node)), deleted_node);
-            } else {
-                return (Some(actual_node), None);
+            Some(Ordering::Greater) => {
+                if let Some(i) = self.left.as_mut() {
+                    return i.update_value(key, new_value);
+                }
+                None
             }
-        } else if let Some(i) = actual_node.right.take() {
-            let (replace, deleted_node) = Self::delete(i, key);
-            actual_node.right = replace;
-            actual_node.fix_height();
-            return (Some(Self::fix_balance(actual_node)), deleted_node);
-        } else {
-            return (Some(actual_node), None);
         }
     }
 
-    fn delete_node(
-        actual_node: Box<TreeNode<K, V>>,
-    ) -> (Option<Box<TreeNode<K, V>>>, Box<TreeNode<K, V>>) {
-        if actual_node.left.is_some() {
-            let (pred, new_actual) = Self::get_predecessor(actual_node);
-            let mut pred = pred.unwrap();
-            let mut new_actual = new_actual.unwrap();
-            pred.left = new_actual.left.take();
-            pred.right = new_actual.right.take();
-            pred.fix_height();
-            return (Some(Self::fix_balance(pred)), new_actual);
+    fn delete(mut actual_node: Box<TreeNode<K, V>>, key: K) -> OptionReplaceRest<K, V> {
+        match actual_node.key.partial_cmp(&key) {
+            Some(Ordering::Equal) => {
+                let (replace, deleted_node) = Self::delete_node(actual_node);
+                (replace, Some(deleted_node))
+            }
+            Some(Ordering::Greater) => {
+                if let Some(i) = actual_node.left.take() {
+                    let (replace, deleted_node) = Self::delete(i, key);
+                    actual_node.left = replace;
+                    actual_node.fix_height();
+                    (Some(Self::fix_balance(actual_node)), deleted_node)
+                } else {
+                    (Some(actual_node), None)
+                }
+            }
+            Some(Ordering::Less) => {
+                if let Some(i) = actual_node.right.take() {
+                    let (replace, deleted_node) = Self::delete(i, key);
+                    actual_node.right = replace;
+                    actual_node.fix_height();
+                    (Some(Self::fix_balance(actual_node)), deleted_node)
+                } else {
+                    (Some(actual_node), None)
+                }
+            }
+            None => (Some(actual_node), None),
         }
-
-        if actual_node.right.is_some() {
-            let (pred, new_actual) = Self::get_successor(actual_node);
-            let mut pred = pred.unwrap();
-            let mut new_actual = new_actual.unwrap();
-            pred.left = new_actual.left.take();
-            pred.right = new_actual.right.take();
-
-            pred.fix_height();
-            return (Some(Self::fix_balance(pred)), new_actual);
-        }
-
-        return (None, actual_node);
     }
 
-    fn get_successor(
-        mut actual_node: Box<TreeNode<K, V>>,
-    ) -> (Option<Box<TreeNode<K, V>>>, Option<Box<TreeNode<K, V>>>) {
+    fn delete_node(actual_node: Box<TreeNode<K, V>>) -> ReplaceResult<K, V> {
+        match (actual_node.left.is_some(), actual_node.right.is_some()) {
+            (true, _) => {
+                let (pred, new_actual) = Self::get_predecessor(actual_node);
+                let mut pred = pred.unwrap();
+                let mut new_actual = new_actual.unwrap();
+                pred.left = new_actual.left.take();
+                pred.right = new_actual.right.take();
+                pred.fix_height();
+                (Some(Self::fix_balance(pred)), new_actual)
+            }
+            (_, true) => {
+                let (pred, new_actual) = Self::get_successor(actual_node);
+                let mut pred = pred.unwrap();
+                let mut new_actual = new_actual.unwrap();
+                pred.left = new_actual.left.take();
+                pred.right = new_actual.right.take();
+
+                pred.fix_height();
+                (Some(Self::fix_balance(pred)), new_actual)
+            }
+            (_, _) => (None, actual_node),
+        }
+    }
+
+    fn get_successor(mut actual_node: Box<TreeNode<K, V>>) -> OptionReplaceRest<K, V> {
         if let Some(i) = actual_node.right.take() {
             let (succ, new_right_node) = Self::get_lowest(i);
             actual_node.right = new_right_node;
             actual_node.fix_height();
-            return (Some(succ), Some(Self::fix_balance(actual_node)));
+            return (Some(succ), Some(actual_node));
         }
         (None, None)
     }
 
-    fn get_predecessor(
-        mut actual_node: Box<TreeNode<K, V>>,
-    ) -> (Option<Box<TreeNode<K, V>>>, Option<Box<TreeNode<K, V>>>) {
+    fn get_predecessor(mut actual_node: Box<TreeNode<K, V>>) -> OptionReplaceRest<K, V> {
         if let Some(i) = actual_node.left.take() {
             let (pred, new_left_node) = Self::get_greatest(i);
             actual_node.left = new_left_node;
             actual_node.fix_height();
-            return (Some(pred), Some(Self::fix_balance(actual_node)));
+            return (Some(pred), Some(actual_node));
         }
         (None, None)
     }
 
-    fn get_lowest(
-        mut actual_node: Box<TreeNode<K, V>>,
-    ) -> (Box<TreeNode<K, V>>, Option<Box<TreeNode<K, V>>>) {
+    fn get_lowest(mut actual_node: Box<TreeNode<K, V>>) -> ReplaceNext<K, V> {
         if let Some(i) = actual_node.left.take() {
             let (lowest, fixed_node) = Self::get_lowest(i);
             actual_node.left = fixed_node;
@@ -378,12 +374,10 @@ impl<K: Clone + PartialEq + Display + PartialOrd, V: Clone + Display + PartialEq
             return (lowest, Some(Self::fix_balance(actual_node)));
         }
         let right_node = actual_node.right.take();
-        return (actual_node, right_node);
+        (actual_node, right_node)
     }
 
-    fn get_greatest(
-        mut actual_node: Box<TreeNode<K, V>>,
-    ) -> (Box<TreeNode<K, V>>, Option<Box<TreeNode<K, V>>>) {
+    fn get_greatest(mut actual_node: Box<TreeNode<K, V>>) -> ReplaceNext<K, V> {
         if let Some(i) = actual_node.right.take() {
             let (greatest, fixed_node) = Self::get_greatest(i);
             actual_node.right = fixed_node;
@@ -391,12 +385,12 @@ impl<K: Clone + PartialEq + Display + PartialOrd, V: Clone + Display + PartialEq
             return (greatest, Some(Self::fix_balance(actual_node)));
         }
         let left_node = actual_node.left.take();
-        return (actual_node, left_node);
+        (actual_node, left_node)
     }
 
     fn new_rotation(node: &TreeNode<K, V>) -> Rotation {
         let factor = node.get_factor();
-        if factor >= -1 && factor <= 1 {
+        if (-1..=1).contains(&factor) {
             return Rotation::NoRotaion;
         }
 
@@ -464,5 +458,32 @@ mod tests {
             let got = tree.get(key.clone());
             assert_eq!(got, None);
         }
+    }
+
+    #[test]
+    fn test_deletion() {
+        let mut tree = Tree::<isize, isize>::new();
+        tree.insert(1, 1);
+        tree.insert(2, 2);
+        tree.insert(3, 3);
+        tree.insert(4, 4);
+
+        assert_eq!(tree.get(1), Some(1));
+        assert_eq!(tree.get(2), Some(2));
+        assert_eq!(tree.get(3), Some(3));
+        assert_eq!(tree.get(4), Some(4));
+
+        assert_eq!(tree.delete(1), Some(1));
+        assert_eq!(tree.get(1), None, "Must be deleted");
+        assert_eq!(tree.get(2), Some(2));
+        assert_eq!(tree.get(3), Some(3));
+        assert_eq!(tree.get(4), Some(4));
+
+        assert_eq!(tree.delete(2), Some(2));
+        assert_eq!(tree.get(1), None, "Must be deleted");
+        assert_eq!(tree.get(2), None, "Must be deleted");
+        assert_eq!(tree.get(3), Some(3));
+        assert_eq!(tree.get(4), Some(4));
+        assert_eq!(tree.size, 2);
     }
 }
